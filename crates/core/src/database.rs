@@ -12,7 +12,7 @@ use std::{
 
 pub(crate) static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 const APPLICATION_ID: i64 = 1414810417;
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 #[cfg(test)]
 #[path = "database_tests.rs"]

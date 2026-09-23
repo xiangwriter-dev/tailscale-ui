@@ -129,6 +129,50 @@ async fn queue_limit_and_revoke_do_not_reject_safe_idempotent_lookup_or_affect_o
 }
 
 #[tokio::test]
+async fn recovery_marks_interrupted_result_collection_without_reexecuting_success() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("agent.db");
+    let store = AgentStore::open(&path).await.unwrap();
+    controller(&store, "a").await;
+    let mut req = request(dir.path());
+    req.result_directory = Some("results".into());
+    let accepted = store.accept("a", &req).await.unwrap().0;
+    store.claim_next().await.unwrap().unwrap();
+    store
+        .transition(
+            &accepted.id,
+            &[RemoteState::Starting],
+            RemoteState::Running,
+            None,
+            "started",
+        )
+        .await
+        .unwrap();
+    store
+        .transition(
+            &accepted.id,
+            &[RemoteState::Running],
+            RemoteState::Succeeded,
+            Some(0),
+            "exit",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        store.get(&accepted.id, None).await.unwrap().result_status,
+        "pending"
+    );
+    store.pool().close().await;
+    drop(store);
+    let reopened = AgentStore::open(&path).await.unwrap();
+    let recovered = reopened.get(&accepted.id, None).await.unwrap();
+    assert_eq!(recovered.state, RemoteState::Succeeded);
+    assert_eq!(recovered.result_status, "incomplete");
+    assert!(reopened.claim_next().await.unwrap().is_none());
+    assert!(!reopened.accept("a", &req).await.unwrap().1);
+}
+
+#[tokio::test]
 async fn controller_history_preserves_unknown_submission_and_uses_separate_locked_directory() {
     let root = tempfile::tempdir().unwrap();
     let controller_dir = root.path().join("controller");
@@ -160,6 +204,12 @@ async fn controller_history_preserves_unknown_submission_and_uses_separate_locke
     };
     ui.save_connection(&connection).await.unwrap();
     let history = ui.prepare(&connection.id, &req).await.unwrap();
+    let mut invalid = req.clone();
+    invalid.request_id = "not-a-uuid".into();
+    assert!(ui.prepare(&connection.id, &invalid).await.is_err());
+    invalid.request_id = uuid::Uuid::new_v4().to_string();
+    invalid.name = "x".repeat(MAX_REQUEST_BYTES);
+    assert!(ui.prepare(&connection.id, &invalid).await.is_err());
     ui.mark_unknown(&history.id).await.unwrap();
     let accepted = agent.accept("c", &req).await.unwrap().0;
     assert_eq!(
@@ -189,6 +239,41 @@ async fn controller_history_preserves_unknown_submission_and_uses_separate_locke
     let mut wrong = accepted.clone();
     wrong.controller_id = "other".into();
     assert!(ui.record_task(&history.id, &wrong).await.is_err());
+    let artifact = Artifact {
+        id: uuid::Uuid::new_v4().to_string(),
+        task_id: accepted.id.clone(),
+        name: "结果/report.txt".into(),
+        size: 5,
+        sha256: hex_digest(b"hello"),
+    };
+    ui.cache_artifacts(&history.id, std::slice::from_ref(&artifact))
+        .await
+        .unwrap();
+    let mut other = artifact.clone();
+    other.task_id = uuid::Uuid::new_v4().to_string();
+    assert!(ui.cache_artifacts(&history.id, &[other]).await.is_err());
+    let mut unsafe_name = artifact.clone();
+    unsafe_name.name = "../escape".into();
+    assert!(ui
+        .cache_artifacts(&history.id, &[unsafe_name])
+        .await
+        .is_err());
+    assert_eq!(
+        ui.artifacts(&history.id).await.unwrap()[0].sha256,
+        artifact.sha256
+    );
+    base.pool().close().await;
+    drop(ui);
+    drop(base);
+    let base = Store::open(&controller_dir.join("controller.db"))
+        .await
+        .unwrap();
+    let ui = ControllerStore::new(base.clone()).await.unwrap();
+    assert_eq!(ui.artifacts(&history.id).await.unwrap()[0].id, artifact.id);
+    assert_eq!(
+        ui.history(&history.id).await.unwrap().sync_error.as_deref(),
+        Some("离线")
+    );
     base.pool().close().await;
     drop(ui);
     drop(base);

@@ -50,6 +50,8 @@ jobs:
             ~/.cargo/git
             target
           key: rust-${{ matrix.artifact }}-1.98.1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            rust-${{ matrix.artifact }}-1.98.1-
       - name: Linux prerequisites
         if: runner.os == 'Linux'
         run: |

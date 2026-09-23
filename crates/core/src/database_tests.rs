@@ -134,7 +134,7 @@ async fn rejects_tampered_migration_checksum() {
 }
 
 #[tokio::test]
-async fn upgrades_v2_to_v3_and_keeps_a_v2_backup() {
+async fn upgrades_v2_to_latest_and_keeps_a_v2_backup() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("v2.db");
     let mut conn = legacy(&path).await;
@@ -155,7 +155,7 @@ async fn upgrades_v2_to_v3_and_keeps_a_v2_backup() {
         .fetch_one(store.pool())
         .await
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, SCHEMA_VERSION);
     let backup = std::fs::read_dir(dir.path().join("backups"))
         .unwrap()
         .next()
@@ -208,6 +208,40 @@ async fn lock_rejects_second_owner_and_restart_interrupts_work() {
     );
     second.run(&task.id).await.unwrap();
     assert_eq!(second.detail(&task.id).await.unwrap().events.len(), 2);
+}
+
+#[tokio::test]
+async fn upgrades_v3_with_role_intact_and_adds_artifact_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("v3.db");
+    let mut conn = legacy(&path).await;
+    for migration in MIGRATOR.iter().filter(|m| m.version == 2 || m.version == 3) {
+        conn.execute(migration.sql.as_ref()).await.unwrap();
+        sqlx::query("INSERT INTO _sqlx_migrations(version,description,success,checksum,execution_time) VALUES(?,?,1,?,0)")
+            .bind(migration.version).bind(migration.description.as_ref()).bind(migration.checksum.as_ref())
+            .execute(&mut conn).await.unwrap();
+    }
+    conn.execute("INSERT INTO remote_role VALUES(1,'controller')")
+        .await
+        .unwrap();
+    conn.close().await.unwrap();
+    let store = Store::open(&path).await.unwrap();
+    let role: String = sqlx::query_scalar("SELECT role FROM remote_role")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(role, "controller");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM remote_artifact_cache")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    assert_eq!(
+        std::fs::read_dir(dir.path().join("backups"))
+            .unwrap()
+            .count(),
+        1
+    );
 }
 
 #[tokio::test]

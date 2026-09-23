@@ -34,10 +34,17 @@ async fn setup(root: &Path, concurrency: u8) -> (AgentStore, Runner) {
     );
     (store, runner)
 }
-async fn finished(store: &AgentStore, id: &str) -> RemoteTask {
+async fn finished(store: &AgentStore, runner: &Runner, id: &str) -> RemoteTask {
     tokio::time::timeout(Duration::from_secs(35), async {
         loop {
             let task = store.get(id, None).await.unwrap();
+            let fault = runner.fault.lock().await.clone();
+            assert!(
+                fault.is_none(),
+                "runner fault: {:?}; task state: {:?}",
+                fault,
+                task.state
+            );
             if task.state.terminal() && task.result_status != "pending" {
                 return task;
             }
@@ -63,7 +70,7 @@ async fn executes_unicode_arguments_persists_output_and_nonzero_exit() {
         .unwrap()
         .0;
     let work = tokio::spawn(runner.clone().run());
-    let done = finished(&store, &first.id).await;
+    let done = finished(&store, &runner, &first.id).await;
     assert_eq!(done.state, RemoteState::Succeeded);
     assert_eq!(done.exit_code, Some(0));
     assert_eq!(done.progress, Some(42.0));
@@ -77,7 +84,10 @@ async fn executes_unicode_arguments_persists_output_and_nonzero_exit() {
     assert!(events
         .iter()
         .any(|e| e.kind == "stderr" && e.text.contains("标准错误")));
-    assert_eq!(finished(&store, &failed.id).await.exit_code, Some(7));
+    assert_eq!(
+        finished(&store, &runner, &failed.id).await.exit_code,
+        Some(7)
+    );
     assert_eq!(
         runner.cancel(&first.id, None).await.unwrap().state,
         RemoteState::Succeeded
@@ -114,11 +124,11 @@ async fn cancel_and_timeout_end_the_owned_tree_and_drain_output() {
     .unwrap();
     runner.cancel(&tree.id, None).await.unwrap();
     assert_eq!(
-        finished(&store, &tree.id).await.state,
+        finished(&store, &runner, &tree.id).await.state,
         RemoteState::Cancelled
     );
     assert_eq!(
-        finished(&store, &timeout.id).await.state,
+        finished(&store, &runner, &timeout.id).await.state,
         RemoteState::TimedOut
     );
     #[cfg(windows)]
@@ -154,7 +164,7 @@ async fn output_flood_is_bounded_and_has_one_truncation_event() {
         .0;
     let work = tokio::spawn(runner.clone().run());
     assert_eq!(
-        finished(&store, &task.id).await.state,
+        finished(&store, &runner, &task.id).await.state,
         RemoteState::Succeeded
     );
     let count: i64 = sqlx::query_scalar(

@@ -412,3 +412,35 @@ async fn read_pipe<R: AsyncRead + Unpin>(
         }
     }
 }
+
+#[cfg(test)]
+mod pipe_tests {
+    use super::*;
+    use tokio::io::AsyncWriteExt;
+
+    #[tokio::test]
+    async fn split_utf8_escapes_and_partial_eof_are_decoded_without_losing_text() {
+        // A one-byte pipe forces every multi-byte codepoint and escape across reads.
+        let (mut writer, reader) = tokio::io::duplex(1);
+        let input = "中文🙂\u{1b}[31m红色\u{1b}[0m\n\u{1b}]0;隐藏标题\u{7}尾部";
+        let bytes = [input.as_bytes(), &[0xe4, 0xb8]].concat();
+        let write = tokio::spawn(async move {
+            writer.write_all(&bytes).await.unwrap();
+        });
+        let (sender, mut receiver) = mpsc::channel(64);
+        read_pipe(reader, "stdout", sender).await.unwrap();
+        write.await.unwrap();
+        let mut output = String::new();
+        while let Some((kind, text)) = receiver.recv().await {
+            assert_eq!(kind, "stdout");
+            output.push_str(&text);
+        }
+        assert_eq!(output, "中文🙂红色\n尾部�");
+        assert_eq!(
+            reported_progress("TAILTASK_PROGRESS {\"percent\":45.5}\n"),
+            Some(45.5)
+        );
+        assert!(reported_progress("TAILTASK_PROGRESS {\"percent\":101}").is_none());
+        assert!(reported_progress("ordinary output").is_none());
+    }
+}

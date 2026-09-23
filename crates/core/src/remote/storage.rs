@@ -386,6 +386,14 @@ impl ControllerStore {
         connection_id: &str,
         request: &RemoteRequest,
     ) -> Result<RemoteHistory, String> {
+        uuid::Uuid::parse_str(&request.request_id).map_err(|_| "INVALID_REQUEST_ID")?;
+        if serde_json::to_vec(request)
+            .map_err(|e| e.to_string())?
+            .len()
+            > MAX_REQUEST_BYTES
+        {
+            return Err("REQUEST_LIMIT".into());
+        }
         let connection = self.connection(connection_id).await?;
         if request.target.agent_id != connection.agent_id
             || request.target.node_id != connection.node_id
@@ -483,6 +491,55 @@ impl ControllerStore {
             sqlx::query("INSERT OR IGNORE INTO remote_observations(history_id,seq,event_json) VALUES(?,?,?)").bind(id).bind(e.seq).bind(serde_json::to_string(e).map_err(|e|e.to_string())?).execute(&mut *tx).await.map_err(db)?;
         }
         tx.commit().await.map_err(db)
+    }
+    pub async fn cache_artifacts(&self, id: &str, artifacts: &[Artifact]) -> Result<(), String> {
+        let current = self.history(id).await?;
+        let remote_id = current.remote_id.ok_or("REMOTE_TASK_NOT_CONFIRMED")?;
+        let mut ids = std::collections::HashSet::new();
+        if artifacts.len() > 100 {
+            return Err("REMOTE_ARTIFACT_LIMIT".into());
+        }
+        let mut total = 0u64;
+        for artifact in artifacts {
+            if artifact.task_id != remote_id
+                || uuid::Uuid::parse_str(&artifact.id).is_err()
+                || !ids.insert(&artifact.id)
+                || validate_relative(&artifact.name).is_err()
+                || artifact.size > 500 * 1024 * 1024
+                || artifact.sha256.len() != 64
+                || !artifact.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Err("REMOTE_ARTIFACT_MISMATCH".into());
+            }
+            total += artifact.size;
+        }
+        if total > 1024 * 1024 * 1024 {
+            return Err("REMOTE_ARTIFACT_LIMIT".into());
+        }
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(db)?;
+        sqlx::query("DELETE FROM remote_artifact_cache WHERE history_id=?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db)?;
+        for artifact in artifacts {
+            sqlx::query("INSERT INTO remote_artifact_cache(history_id,artifact_id,artifact_json) VALUES(?,?,?)")
+                .bind(id).bind(&artifact.id).bind(serde_json::to_string(artifact).map_err(|e|e.to_string())?)
+                .execute(&mut *tx).await.map_err(db)?;
+        }
+        tx.commit().await.map_err(db)
+    }
+    pub async fn artifacts(&self, id: &str) -> Result<Vec<Artifact>, String> {
+        self.history(id).await?;
+        let rows: Vec<String> = sqlx::query_scalar("SELECT artifact_json FROM remote_artifact_cache WHERE history_id=? ORDER BY artifact_id")
+            .bind(id).fetch_all(self.pool()).await.map_err(db)?;
+        rows.into_iter()
+            .map(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+            .collect()
     }
     pub async fn events(&self, id: &str, after: i64) -> Result<Vec<RemoteEvent>, String> {
         let rows:Vec<String>=sqlx::query_scalar("SELECT event_json FROM remote_observations WHERE history_id=? AND seq>? ORDER BY seq LIMIT 200").bind(id).bind(after.max(0)).fetch_all(self.pool()).await.map_err(db)?;

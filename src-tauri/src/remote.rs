@@ -153,7 +153,6 @@ pub async fn remote_detail(
 ) -> Result<RemoteDetail, String> {
     let history = state.remote.history(&id).await?;
     let cursor = after.unwrap_or(0).max(0);
-    let mut artifacts = Vec::new();
     if let Some(remote_id) = &history.remote_id {
         let synced = async {
             live_target(
@@ -170,9 +169,10 @@ pub async fn remote_detail(
                 .await?;
             state.remote.cache_events(&id, &events).await?;
             if task.result_status == "complete" {
-                artifacts = client
+                let artifacts: Vec<Artifact> = client
                     .get(&format!("/v1/tasks/{remote_id}/artifacts"))
                     .await?;
+                state.remote.cache_artifacts(&id, &artifacts).await?;
             }
             Ok::<(), String>(())
         }
@@ -184,7 +184,7 @@ pub async fn remote_detail(
     Ok(RemoteDetail {
         history: state.remote.history(&id).await?,
         events: state.remote.events(&id, cursor).await?,
-        artifacts,
+        artifacts: state.remote.artifacts(&id).await?,
     })
 }
 
