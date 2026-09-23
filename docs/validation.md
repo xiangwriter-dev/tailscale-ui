@@ -31,6 +31,8 @@
 
 macOS 取消测试曾暴露 Darwin 对仅含僵尸的进程组返回 EPERM，修复增加 libproc 状态确认，真实权限拒绝仍报错，不再重复向已确认结束的数字进程组发送信号。依据：[Apple XNU killpg1 实现](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/kern_sig.c)、[libproc 接口](https://github.com/apple-oss-distributions/xnu/blob/main/libsyscall/wrappers/libproc/libproc.c)。最终平台结论以 CI 链接为准。
 
+Linux AppImage 后台与自启使用持久的 APPIMAGE 路径，避免保存 GUI 的临时挂载可执行路径；systemd ExecStart 禁止环境变量展开并转义路径百分号。依据：[AppImage 环境变量](https://docs.appimage.org/packaging-guide/environment-variables.html)、[systemd 命令行语法](https://github.com/systemd/systemd/blob/v257/man/systemd.service.xml)。包含路径选择和模板测试，真实登录自启仍未冒充实测。
+
 ## 尚未证明的项目
 
 - 不同构建生成的安装包哈希可能不同；本机安装证据对应上述明确哈希，GitHub CI 产物各有独立清单。

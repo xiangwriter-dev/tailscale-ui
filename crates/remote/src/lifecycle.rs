@@ -7,6 +7,36 @@ use serde::{Deserialize, Serialize};
 use std::{path::Path, process::Stdio, time::Duration};
 
 pub const SERVE_FLAG: &str = "--xiangwriter-agent";
+
+pub(crate) fn service_executable() -> Result<std::path::PathBuf, String> {
+    let current = std::env::current_exe().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "linux")]
+    if let (Some(image), Some(mount)) = (std::env::var_os("APPIMAGE"), std::env::var_os("APPDIR")) {
+        return appimage_executable(&current, Path::new(&image), Path::new(&mount));
+    }
+    Ok(current)
+}
+
+#[cfg(target_os = "linux")]
+fn appimage_executable(
+    current: &Path,
+    image: &Path,
+    mount: &Path,
+) -> Result<std::path::PathBuf, String> {
+    let mounted = mount
+        .canonicalize()
+        .map_err(|_| "APPIMAGE_MOUNT_UNAVAILABLE")?;
+    if !current.starts_with(&mounted) {
+        return Ok(current.to_owned());
+    }
+    if !image.is_absolute() || !image.is_file() {
+        return Err("APPIMAGE_PATH_UNAVAILABLE".into());
+    }
+    // Launch the durable image so its own runtime keeps a mount alive after the GUI exits.
+    image
+        .canonicalize()
+        .map_err(|_| "APPIMAGE_PATH_UNAVAILABLE".into())
+}
 pub fn background_entry() -> bool {
     if std::env::args_os().nth(1).as_deref() != Some(std::ffi::OsStr::new(SERVE_FLAG)) {
         return false;
@@ -90,7 +120,7 @@ pub async fn start(directory: &Path, config: AgentConfig) -> Result<LocalAgentSt
         .write(true)
         .open(&error_path)
         .map_err(|e| e.to_string())?;
-    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let executable = service_executable()?;
     let mut command = std::process::Command::new(executable);
     command
         .arg(SERVE_FLAG)
@@ -136,4 +166,27 @@ pub async fn start(directory: &Path, config: AgentConfig) -> Result<LocalAgentSt
     let _ = child.kill();
     let _ = child.wait();
     Err("AGENT_START_NOT_CONFIRMED".into())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    #[test]
+    fn appimage_background_uses_the_durable_image_path() {
+        let root = tempfile::tempdir().unwrap();
+        let mount = root.path().join("mount");
+        std::fs::create_dir(&mount).unwrap();
+        let executable = mount.join("app");
+        let image = root.path().join("remote.AppImage");
+        std::fs::write(&image, b"test only").unwrap();
+        assert_eq!(
+            appimage_executable(&executable, &image, &mount).unwrap(),
+            image
+        );
+        assert_eq!(
+            appimage_executable(Path::new("/usr/bin/app"), &image, &mount).unwrap(),
+            Path::new("/usr/bin/app")
+        );
+        assert!(appimage_executable(&executable, &root.path().join("missing"), &mount).is_err());
+    }
 }

@@ -147,7 +147,7 @@ pub async fn enabled() -> Result<bool, String> {
 pub async fn set(enabled: bool, data: &Path) -> Result<(), String> {
     let path = unit_path()?;
     let file = path.to_str().ok_or("INVALID_UNIT_PATH")?;
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe = crate::lifecycle::service_executable()?;
     let exe = checked(exe.to_str().ok_or("INVALID_EXECUTABLE_PATH")?)?;
     let data_text = checked(data.to_str().ok_or("INVALID_DATA_PATH")?)?;
     #[cfg(target_os = "macos")]
@@ -231,7 +231,7 @@ pub fn linux_unit(executable: &str, data: &str) -> String {
             .replace('"', "\\\"")
             .replace('%', "%%")
     };
-    format!("[Unit]\nDescription=xiangwriter remote task agent\nAfter=network-online.target\n[Service]\nType=simple\nExecStart=\"{}\" --xiangwriter-agent \"{}\"\nKillMode=control-group\nTimeoutStopSec=10\n[Install]\nWantedBy=default.target\n",quote(executable),quote(data))
+    format!("[Unit]\nDescription=xiangwriter remote task agent\nAfter=network-online.target\n[Service]\nType=simple\nExecStart=:\"{}\" --xiangwriter-agent \"{}\"\nKillMode=control-group\nTimeoutStopSec=10\n[Install]\nWantedBy=default.target\n",quote(executable),quote(data))
 }
 
 #[cfg(test)]
@@ -245,6 +245,8 @@ mod tests {
         assert!(win.contains("&quot;C:"));
         assert!(macos_plist("/path/<app>", "/home/test").contains("&lt;app&gt;"));
         assert!(linux_unit("/home/test/my app", "/tmp/%name").contains("/tmp/%%name"));
+        assert!(linux_unit("/home/test/$app", "/tmp/${data}")
+            .contains("ExecStart=:\"/home/test/$app\""));
         assert!(checked("x\ny").is_err());
     }
 }
