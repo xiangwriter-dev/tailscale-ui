@@ -99,6 +99,12 @@ async fn rejects_unrelated_and_newer_databases_without_modifying_them() {
         .execute(store.pool())
         .await
         .unwrap();
+    // Freeze the physical fixture before comparing bytes: pooled SQLite worker
+    // shutdown can otherwise finish its last WAL checkpoint after close().
+    sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+        .execute(store.pool())
+        .await
+        .unwrap();
     store.pool().close().await;
     drop(store);
     let before = std::fs::read(&newer).unwrap();
@@ -107,7 +113,10 @@ async fn rejects_unrelated_and_newer_databases_without_modifying_them() {
         .err()
         .unwrap()
         .contains("DATABASE_TOO_NEW"));
-    assert_eq!(before, std::fs::read(&newer).unwrap());
+    assert!(
+        before == std::fs::read(&newer).unwrap(),
+        "rejected database must remain byte-identical"
+    );
 }
 
 #[tokio::test]

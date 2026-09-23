@@ -43,6 +43,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-${{ matrix.artifact }}-1.98.1-${{ hashFiles('Cargo.lock') }}
       - name: Linux prerequisites
         if: runner.os == 'Linux'
         run: |
