@@ -36,7 +36,7 @@
 
 允许工作目录用于位置校验，不是命令沙箱。执行权限等同目标当前用户。Linux 凭证存储需要登录会话中的 Secret Service，不提供明文降级。界面采用简约科技风，GPT Image 设计参考及提示词位于 docs/design。
 
-应用标识为 `com.xiangwriter.remote`，本地数据位置在“设置”页查看。控制端为 controller.db，执行端为 agent/agent.db。0.2.0 使用模式 3；升级后 0.1.0 无法打开新模式数据。卸载不主动删除用户数据库。
+应用标识为 `com.xiangwriter.remote`，本地数据位置在“设置”页查看。控制端为 controller.db，执行端为 agent/agent.db。0.2.0 使用模式 4，包含离线结果文件索引；升级后 0.1.0 无法打开新模式数据。卸载不主动删除用户数据库。
 
 ## 开发与打包
 

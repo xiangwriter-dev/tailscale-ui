@@ -325,6 +325,39 @@ mod tests {
                 .unwrap_err()
                 .contains("SYMLINK")
         );
+        std::fs::remove_file(out.join("escape")).unwrap();
+        use std::os::unix::ffi::OsStrExt;
+        let fifo = std::ffi::CString::new(out.join("pipe").as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+        assert!(
+            snapshot(root.path(), "results", &root.path().join("private"), "task")
+                .unwrap_err()
+                .contains("SPECIAL_FILE")
+        );
+    }
+    #[test]
+    fn result_limits_reject_large_files_and_remove_partial_snapshots() {
+        let root = tempfile::tempdir().unwrap();
+        let results = root.path().join("results");
+        let destination = root.path().join("snapshots");
+        std::fs::create_dir(&results).unwrap();
+        for i in 0..101 {
+            std::fs::write(results.join(format!("{i}.txt")), "small").unwrap();
+        }
+        assert!(snapshot(root.path(), "results", &destination, "task")
+            .unwrap_err()
+            .contains("FILE_COUNT_LIMIT"));
+        assert_eq!(std::fs::read_dir(&destination).unwrap().count(), 0);
+        let large = root.path().join("large");
+        std::fs::create_dir(&large).unwrap();
+        File::create(large.join("oversize"))
+            .unwrap()
+            .set_len(MAX_FILE + 1)
+            .unwrap();
+        assert!(snapshot(root.path(), "large", &destination, "task")
+            .unwrap_err()
+            .contains("FILE_SIZE_LIMIT"));
+        assert_eq!(std::fs::read_dir(&destination).unwrap().count(), 0);
     }
     #[test]
     fn ranges_reject_overflow_multipart_and_invalid_bounds() {

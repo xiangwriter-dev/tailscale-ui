@@ -13,7 +13,7 @@ const snapshot=(context_id='network-a'):NetworkSnapshot=>({state:'ready',version
 const task:Task={id:'test-task-1',request_id:'test-request',action:'check_database',scope:'local_application',label:'数据库检查',state:'queued',created_at:device.observed_at,started_at:null,finished_at:null,result:null,persistence_warning:null};
 beforeEach(()=>{
   vi.resetAllMocks();mocks.isDesktop=true;
-  mocks.api.info.mockResolvedValue({version:'0.1.0',data_dir:'test-only',agent_policy:'repair_only',remote_enabled:false,ui_design:'minimal_tech'});
+  mocks.api.info.mockResolvedValue({version:'0.2.0',data_dir:'test-only',agent_policy:'paired_user_tasks',remote_enabled:true,ui_design:'minimal_tech'});
   mocks.api.settings.mockResolvedValue({refresh_seconds:'30'});
   mocks.api.refresh.mockResolvedValue(snapshot());
   mocks.api.tasks.mockResolvedValue([]);
