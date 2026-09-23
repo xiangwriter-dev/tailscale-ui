@@ -10,7 +10,15 @@
 - Windows Rust check、fmt 与 43 项测试通过（含辅助入口）；新增网络变化、节点不可见、本机/系统限制、IP 参数注入拒绝、最新地址选择、固定系统客户端路径和启动失败测试。
 - 新命令已经列入 Tauri 的生成命令清单及主窗口能力声明。后端每次启动重新 inspect，前端仅传网络与节点 ID。
 - 原生窗口的完整点击、远端 Windows 账号登录和证书提示没有自动操作验证。应用只声明 mstsc 已打开，不声明远端登录成功。
-- 安装包的后续 CI、安装及公开下载证据记录在本节。本轮不覆盖历史平台验证结论。
+- [最终 Windows 构建 35905779960](https://github.com/xiangwriter-dev/tailscale-ui/actions/runs/35905779960) 对应源码 9e8bac0；前端、Rust、打包、安装验证及产物收集步骤均成功。
+
+最终 CI 在独立 Windows 运行器中安装 0.2.1，核对产品名/版本，并逐字节确认 NSIS 安装后的程序内容符合预期打包变换；安装与卸载退出码均为 0，卸载后测试可执行文件移除。
+
+[v0.2.1 Windows 测试版](https://github.com/xiangwriter-dev/tailscale-ui/releases/tag/v0.2.1) 已公开，文件 `xiangwriter-remote_0.2.1_x64-setup.exe` 为 5,366,920 字节，SHA-256：`2bc87190fb9b21c5af1a64ca0c106e3d3b4ed04f327d93b403823c8b32a47afb`。安装器及两份清单均核对 GitHub 服务端摘要，随后不带账号凭据下载公开安装包并再次核对 SHA-256。本轮不覆盖历史平台验证结论。
+
+本机构建的 0.2.1 原生程序在独立目录通过真实 Tailscale/Windows 凭证库的配对、exec/script、幂等、取消、重启记录与撤销回归。用户旧版正在运行，因此本轮没有在用户主机静默安装或卸载，安装测试移至隔离的 Windows CI。
+
+首次 CI 已完成安装和产品版本核对，但直接比较安装后程序与构建目录程序的哈希失败。[Tauri 打包实现](https://github.com/tauri-apps/tauri/blob/dev/crates/tauri-bundler/src/bundle.rs) 会将 bundle marker 从 UNK 改为 NSS，再恢复构建目录中的原程序。校验脚本已按该确切变换构造预期载荷，全文件逐字节比较，不忽略其他差异；2 项 Node 回归测试覆盖正常标记、其他字节损坏、缺失标记及截断。未修改应用程序以绕过检查。
 
 ## 0.2.0 历史证据
 
