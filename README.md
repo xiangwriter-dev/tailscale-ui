@@ -8,7 +8,7 @@
 
 [安装包与 SHA-256 清单](https://github.com/xiangwriter-dev/tailscale-ui/releases) · [构建状态](https://github.com/xiangwriter-dev/tailscale-ui/actions) · [验证记录](docs/validation.md)
 
-- Windows x64：`xiangwriter远程器_0.2.0_x64-setup.exe`，NSIS 当前用户安装，缺少 WebView2 时从微软下载运行时。
+- Windows x64：`xiangwriter-remote_0.2.0_x64-setup.exe`，NSIS 当前用户安装，缺少 WebView2 时从微软下载运行时。
 - macOS：Apple Silicon 与 Intel 分别提供 DMG。
 - Linux：Ubuntu 24.04 x64 基线，AppImage 和 deb。
 
