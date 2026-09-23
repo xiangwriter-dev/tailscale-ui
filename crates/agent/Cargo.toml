@@ -1,0 +1,16 @@
+[package]
+name = "tailtask-agent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tailtask-core = { path = "../core" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"
+sqlx.workspace = true

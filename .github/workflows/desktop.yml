@@ -1,0 +1,75 @@
+name: Desktop checks and installers
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  desktop:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-2022
+            artifact: windows-x64
+            bundles: nsis
+          - name: macOS Apple Silicon
+            os: macos-15
+            artifact: macos-arm64
+            bundles: dmg
+          - name: macOS Intel
+            os: macos-15-intel
+            artifact: macos-x64
+            bundles: dmg
+          - name: Ubuntu 24.04 x64
+            os: ubuntu-24.04
+            artifact: linux-x64
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2t64 file
+      - name: Locked dependencies
+        run: npm ci
+      - name: Frontend checks
+        run: |
+          npm run check
+          npm test
+          npm run build
+      - name: Rust checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup show
+          cargo fmt --all --check
+          cargo check --workspace --locked
+          cargo test --workspace --locked
+      - name: Build unsigned test installers
+        run: npm run tauri build -- --bundles ${{ matrix.bundles }} -- --locked
+      - name: Collect artifacts and checksums
+        run: node scripts/collect-artifacts.mjs ${{ matrix.artifact }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tailtask-0.1.0-${{ matrix.artifact }}-unsigned
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30

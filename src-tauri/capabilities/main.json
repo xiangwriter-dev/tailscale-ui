@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Only the local main window may use typed application commands.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "allow-refresh-network", "allow-cached-devices", "allow-update-device",
+    "allow-get-settings", "allow-save-setting", "allow-list-tasks",
+    "allow-task-detail", "allow-submit-repair", "allow-app-info"
+  ]
+}
