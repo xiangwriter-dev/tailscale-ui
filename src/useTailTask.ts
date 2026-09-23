@@ -21,8 +21,9 @@ export function useTailTask() {
   const [detailId,setDetailId]=useState<string|null>(null);
   const [detailError,setDetailError]=useState('');
   const [repairBusy,setRepairBusy]=useState(false);
+  const [desktopNode,setDesktopNode]=useState<string|null>(null);
   const [pendingAction,setPendingAction]=useState<RepairAction|null>(null);
-  const refreshBusy=useRef(false), submitBusy=useRef(false), settingsBusy=useRef(false);
+  const refreshBusy=useRef(false), submitBusy=useRef(false), settingsBusy=useRef(false), desktopBusy=useRef(false);
   const context=useRef('');
   const listSequence=useRef(0), detailSequence=useRef(0);
   const pendingRequests=useRef<Partial<Record<RepairAction,string>>>({});
@@ -79,8 +80,11 @@ export function useTailTask() {
   },[refresh,report]);
   useEffect(()=>{
     if(!isDesktop) return;
-    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void refresh();},Number(intervalSeconds)*1000);
-    return ()=>window.clearInterval(timer);
+    const onVisible=()=>{if(document.visibilityState==='visible')void refresh();};
+    const timer=window.setInterval(onVisible,Number(intervalSeconds)*1000);
+    window.addEventListener('focus',onVisible);
+    document.addEventListener('visibilitychange',onVisible);
+    return ()=>{window.clearInterval(timer);window.removeEventListener('focus',onVisible);document.removeEventListener('visibilitychange',onVisible);};
   },[intervalSeconds,refresh]);
   useEffect(()=>{
     if(!isDesktop) return;
@@ -101,6 +105,29 @@ export function useTailTask() {
       if(context.current===current) setDevices(list=>list.map(item=>item.node_id===device.node_id?{...item,alias,favorite}:item));
       setNotice('设备偏好已保存');
     } catch(e) {report(e);}
+  }
+  function desktopUnavailable(device:Device):string {
+    if(!isDesktop)return '请在 Windows 桌面客户端中连接';
+    if(!info)return '正在读取客户端信息';
+    if(!info.rdp_supported)return '此入口仅支持 Windows 客户端';
+    if(cached||snapshot?.state!=='ready'||!device.visible)return '请刷新并确认当前网络中的设备';
+    if(device.is_self)return '这是本机，请选择另一台 Windows 设备';
+    if(device.os.toLowerCase()!=='windows')return '此入口用于连接 Windows 设备';
+    if(!device.addresses.length)return '尚未读取到设备地址，请刷新';
+    return '';
+  }
+  async function connectDesktop(device:Device) {
+    if(desktopBusy.current||desktopUnavailable(device)||!context.current)return;
+    const current=context.current;
+    desktopBusy.current=true;setDesktopNode(device.node_id);setError('');setNotice('');
+    try {
+      const address=await api.openDesktop(current,device.node_id);
+      if(mounted.current&&context.current===current) {
+        setNotice(`已为 ${device.alias||device.name}（${address}）打开系统远程桌面，请在系统窗口完成登录。`);
+        void refresh();
+      }
+    } catch(e) {if(mounted.current)report(e);}
+    finally {desktopBusy.current=false;if(mounted.current)setDesktopNode(null);}
   }
   async function saveInterval(value:string) {
     if(settingsBusy.current||!isDesktop) return;
@@ -126,7 +153,7 @@ export function useTailTask() {
   }
   return {snapshot,devices,selectedId,setSelectedId,cached,loading,error,setError,notice,setNotice,info,intervalSeconds,savingSetting,
     tasks,recent,taskPage,setTaskPage,tasksLoading,detail,detailId,detailError,repairBusy,pendingAction,
-    refresh,loadTasks,openTask,closeTask,readDetail,updateDevice,saveInterval,repair,
+    refresh,loadTasks,openTask,closeTask,readDetail,updateDevice,saveInterval,repair,desktopNode,desktopUnavailable,connectDesktop,
     selected:devices.find(device=>device.node_id===selectedId)||null};
 }
 export type TailTaskState=ReturnType<typeof useTailTask>;

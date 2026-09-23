@@ -2,19 +2,22 @@
 
 基于 **Tauri 2 + React + Rust + SQLite** 的原生桌面应用，使用官方 Tailscale 网络连接设备。
 
-0.2.0 测试版包含设备管理、执行端配对、远程命令与脚本、持久任务记录、日志、取消、超时和结果文件下载。用户已撤回原“Agent 仅能修复”的限制。本机数据库维护仍保持独立入口。
+0.2.1 Windows 测试版增加设备列表直接打开系统远程桌面，复用已配置的 Windows RDP；保留设备管理、执行端配对、远程命令与脚本、任务记录、日志、取消、超时和结果文件下载。按用户最新要求，本轮只完成 Windows，macOS/Linux 开发与验收搁置。
 
 ## 安装
 
 [安装包与 SHA-256 清单](https://github.com/xiangwriter-dev/tailscale-ui/releases) · [构建状态](https://github.com/xiangwriter-dev/tailscale-ui/actions) · [验证记录](docs/validation.md)
 
-- Windows x64：`xiangwriter-remote_0.2.0_x64-setup.exe`，NSIS 当前用户安装，缺少 WebView2 时从微软下载运行时。
-- macOS：Apple Silicon 与 Intel 分别提供 DMG。
-- Linux：Ubuntu 24.04 x64 基线，AppImage 和 deb。
+- Windows x64：`xiangwriter-remote_0.2.1_x64-setup.exe`，NSIS 当前用户安装，缺少 WebView2 时从微软下载运行时。
+- macOS/Linux：本轮不发布新包；历史 0.2.0 附件仍保留，尚未完成的实机验收继续搁置。
 
 所有产物均为无签名测试构建，尚无 Windows 代码签名或 Apple 公证。发布资产存在和 CI 通过只证明对应构建成功，原生安装、跨机器与平台集成测试另行记录。
 
 ## 使用
+
+连接 Windows 桌面：打开“设备”，点击目标的“远程桌面”，应用自动读取地址并启动系统连接窗口。此功能无需任务执行端配对，登录在 Windows 窗口里完成。详见 [Windows 远程桌面](docs/windows-rdp.md)。
+
+运行远程命令或脚本：
 
 1. 两端安装并登录官方 [Tailscale](https://tailscale.com/docs/how-to/quickstart)，确认网络策略允许目标 TCP 47321。
 2. 在目标打开“本机执行端”，选择允许工作目录并开启。新安装默认关闭，应用不自动授权网络内设备。

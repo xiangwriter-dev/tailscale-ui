@@ -13,6 +13,16 @@ const state={cached:false,selectedId:'node',snapshot:{state:'ready',context_id:'
 beforeEach(()=>{vi.resetAllMocks();mocks.connections.mockResolvedValue([connection]);mocks.capabilities.mockResolvedValue({identity:{agent_id:'agent',node_id:'node'},os:'windows',account:'合成账户',allowed_directories:['C:\\jobs'],interpreters:['powershell'],concurrency:1,accepting:true});mocks.histories.mockResolvedValue([]);Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value:function(this:HTMLDialogElement){this.open=true;}});Object.defineProperty(HTMLDialogElement.prototype,'close',{configurable:true,value:function(this:HTMLDialogElement){this.open=false;}});});
 afterEach(cleanup);
 
+it('explains that system remote desktop needs no task pairing and returns to devices',async()=>{
+  const user=userEvent.setup(),onDevices=vi.fn();
+  render(<RemoteWorkspace state={state} onDevices={onDevices}/>);
+  await screen.findByText('执行端已连接');
+  await user.click(screen.getByRole('button',{name:'配对设备'}));
+  expect(screen.getByText(/连接 Windows 远程桌面无需配对/)).toBeTruthy();
+  await user.click(screen.getByRole('button',{name:'返回设备，打开远程桌面'}));
+  expect(onDevices).toHaveBeenCalledTimes(1);
+});
+
 it('retains the original request after response loss and detail failure never submits a second task',async()=>{
   const user=userEvent.setup();let captured:unknown;
   mocks.submit.mockImplementation(async(_connection,request)=>{captured=request;return {id:'history',connection_id:'connection',target:connection,request,submission_state:'submission_unknown',remote_id:null,task:null,sync_error:'连接中断',created_at:'2026-01-01',synced_at:null};});

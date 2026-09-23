@@ -4870,7 +4870,7 @@ dependencies = [
 
 [[package]]
 name = "tailtask-agent"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "serde",
@@ -4885,7 +4885,7 @@ dependencies = [
 
 [[package]]
 name = "tailtask-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "getrandom 0.3.4",
@@ -4901,7 +4901,7 @@ dependencies = [
 
 [[package]]
 name = "tailtask-desktop"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "rfd",
  "serde",
@@ -4913,11 +4913,12 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tokio",
  "uuid",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "tailtask-remote"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "axum",
  "axum-server",

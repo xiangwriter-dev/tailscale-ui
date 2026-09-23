@@ -16,4 +16,4 @@ export interface Task {
 }
 export interface TaskEvent { seq: number; task_id: string; kind: string; message: string; occurred_at: string }
 export interface TaskDetail { task: Task; events: TaskEvent[] }
-export interface AppInfo { version: string; data_dir: string; agent_policy: string; ui_design: string; remote_enabled: boolean }
+export interface AppInfo { version: string; data_dir: string; agent_policy: string; ui_design: string; remote_enabled: boolean; rdp_supported: boolean }

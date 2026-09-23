@@ -15,6 +15,7 @@ export const api = {
     : Promise.resolve(() => {}),
   info: () => call<AppInfo>('app_info'),
   refresh: () => call<NetworkSnapshot>('refresh_network'),
+  openDesktop: (contextId: string, nodeId: string) => call<string>('open_remote_desktop', { contextId, nodeId }),
   cached: (contextId: string) => call<Device[]>('cached_devices', { contextId }),
   devices: (contextId: string, nodeId: string, alias: string, favorite: boolean) =>
     call<void>('update_device', { contextId, nodeId, alias, favorite }),

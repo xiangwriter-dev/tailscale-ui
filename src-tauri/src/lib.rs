@@ -1,5 +1,6 @@
 use tailtask_core::{Device, NetworkSnapshot, RepairRequest, Store, Task, TaskDetail};
 use tauri::{Emitter, Manager, State};
+mod rdp;
 mod remote;
 
 struct AppState {
@@ -119,7 +120,7 @@ async fn submit_repair(
 #[tauri::command]
 fn app_info(state: State<'_, AppState>) -> serde_json::Value {
     serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"data_dir":state.data_dir,
-        "agent_policy":"paired_user_tasks","ui_design":"minimal_tech","remote_enabled":true})
+        "agent_policy":"paired_user_tasks","ui_design":"minimal_tech","remote_enabled":true,"rdp_supported":cfg!(windows)})
 }
 
 pub fn run() {
@@ -162,6 +163,7 @@ pub fn run() {
             task_detail,
             submit_repair,
             app_info,
+            rdp::open_remote_desktop,
             remote::remote_connections,
             remote::pair_remote,
             remote::remote_capabilities,

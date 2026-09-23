@@ -11,3 +11,4 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.activity-bar>span{width:55%}}
 
 .network-art{color:#729bdd}.brand{font-size:20px;letter-spacing:-.5px}.brand small{letter-spacing:.5px}
+.rdp-column{width:104px!important}.rdp-column .rdp-button{font-size:11px;padding:7px 9px;white-space:nowrap;min-height:32px}.rdp-button-wrap{display:inline-block}.rdp-detail{margin-top:20px;padding:16px 0;border-top:1px solid #e5edf7}.rdp-detail h3{font-size:13px}.rdp-detail p{font-size:12px;line-height:1.8;margin:8px 0 12px;color:#596d89}.rdp-detail small{display:block;margin-top:9px;color:#687991;font-size:11px}.rdp-pairing-note{margin-bottom:16px!important;line-height:1.8}.rdp-pairing-note button{display:block;margin-top:8px}@media(max-width:1220px){.device-table th:nth-child(2),.device-table td:nth-child(2){display:none}.device-table th:first-child{width:auto}.rdp-column{width:91px!important}}

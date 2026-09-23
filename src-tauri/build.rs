@@ -10,6 +10,7 @@ fn main() {
             "task_detail",
             "submit_repair",
             "app_info",
+            "open_remote_desktop",
             "remote_connections",
             "pair_remote",
             "remote_capabilities",

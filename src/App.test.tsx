@@ -3,7 +3,7 @@ import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
 import { act,cleanup,render,renderHook,screen,waitFor,within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Device,NetworkSnapshot,Task } from './types';
-const mocks=vi.hoisted(()=>({isDesktop:true,api:{info:vi.fn(),settings:vi.fn(),refresh:vi.fn(),tasks:vi.fn(),detail:vi.fn(),repair:vi.fn(),devices:vi.fn(),saveSetting:vi.fn(),onStorageError:vi.fn()}}));
+const mocks=vi.hoisted(()=>({isDesktop:true,api:{info:vi.fn(),settings:vi.fn(),refresh:vi.fn(),tasks:vi.fn(),detail:vi.fn(),repair:vi.fn(),devices:vi.fn(),saveSetting:vi.fn(),onStorageError:vi.fn(),openDesktop:vi.fn()}}));
 vi.mock('./api',()=>mocks);
 import App from './App';
 import { useTailTask } from './useTailTask';
@@ -13,7 +13,7 @@ const snapshot=(context_id='network-a'):NetworkSnapshot=>({state:'ready',version
 const task:Task={id:'test-task-1',request_id:'test-request',action:'check_database',scope:'local_application',label:'数据库检查',state:'queued',created_at:device.observed_at,started_at:null,finished_at:null,result:null,persistence_warning:null};
 beforeEach(()=>{
   vi.resetAllMocks();mocks.isDesktop=true;
-  mocks.api.info.mockResolvedValue({version:'0.2.0',data_dir:'test-only',agent_policy:'paired_user_tasks',remote_enabled:true,ui_design:'minimal_tech'});
+  mocks.api.info.mockResolvedValue({version:'0.2.1',data_dir:'test-only',agent_policy:'paired_user_tasks',remote_enabled:true,ui_design:'minimal_tech',rdp_supported:true});
   mocks.api.settings.mockResolvedValue({refresh_seconds:'30'});
   mocks.api.refresh.mockResolvedValue(snapshot());
   mocks.api.tasks.mockResolvedValue([]);
@@ -27,6 +27,48 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.useRealTimers();});
 
 describe('desktop interactions with a mocked IPC boundary',()=>{
+  it('opens system RDP directly without task pairing and permits retry after failure',async()=>{
+    const user=userEvent.setup();
+    const peer={...device,node_id:'rdp-target',name:'远程主机',is_self:false};
+    mocks.api.refresh.mockResolvedValue({...snapshot(),devices:[device,peer]});
+    mocks.api.openDesktop.mockRejectedValueOnce(new Error('RDP_LAUNCH: 启动失败')).mockResolvedValue('100.64.0.42');
+    render(<App/>);
+    const button=await screen.findByRole('button',{name:'远程桌面 远程主机'});
+    await waitFor(()=>expect((button as HTMLButtonElement).disabled).toBe(false));
+    expect((screen.getByRole('button',{name:'远程桌面 '+device.name}) as HTMLButtonElement).disabled).toBe(true);
+    await user.click(button);
+    expect((await screen.findByRole('alert')).textContent).toContain('RDP_LAUNCH: 启动失败');
+    expect(screen.queryByText(/已为 .*打开系统远程桌面/)).toBeNull();
+    await user.click(button);
+    expect(await screen.findByText(/已为 远程主机（100.64.0.42）打开系统远程桌面/)).toBeTruthy();
+    expect(mocks.api.openDesktop.mock.calls).toEqual([['network-a','rdp-target'],['network-a','rdp-target']]);
+    expect(mocks.api.repair).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog',{name:'配对执行端'})).toBeNull();
+  });
+  it('deduplicates pending RDP clicks and disables non-Windows targets',async()=>{
+    const user=userEvent.setup();let finish!:(address:string)=>void;
+    const peer={...device,node_id:'rdp-target',name:'远程主机',is_self:false};
+    mocks.api.refresh.mockResolvedValue({...snapshot(),devices:[peer,{...peer,node_id:'linux',name:'Linux 主机',os:'linux'}]});
+    mocks.api.openDesktop.mockImplementation(()=>new Promise<string>(resolve=>{finish=resolve;}));
+    render(<App/>);
+    const button=await screen.findByRole('button',{name:'远程桌面 远程主机'});
+    await waitFor(()=>expect((button as HTMLButtonElement).disabled).toBe(false));
+    await user.click(button);await user.click(button);
+    expect(mocks.api.openDesktop).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole('button',{name:'远程桌面 Linux 主机'}) as HTMLButtonElement).disabled).toBe(true);
+    await act(async()=>finish('100.64.0.42'));
+    expect(await screen.findByText(/已为 远程主机/)).toBeTruthy();
+  });
+  it('refreshes on returning to the app without overlapping status requests',async()=>{
+    const {result}=renderHook(()=>useTailTask());
+    await waitFor(()=>expect(result.current.snapshot?.context_id).toBe('network-a'));
+    let finish!:(next:NetworkSnapshot)=>void;
+    mocks.api.refresh.mockImplementationOnce(()=>new Promise<NetworkSnapshot>(resolve=>{finish=resolve;}));
+    act(()=>{window.dispatchEvent(new Event('focus'));document.dispatchEvent(new Event('visibilitychange'));});
+    expect(mocks.api.refresh).toHaveBeenCalledTimes(2);
+    await act(async()=>finish(snapshot('network-b')));
+    expect(result.current.snapshot?.context_id).toBe('network-b');
+  });
   it('keeps effective setting after storage failure, saves only on success',async()=>{
     const user=userEvent.setup();render(<App/>);
     await user.click(screen.getByRole('button',{name:'设置'}));
