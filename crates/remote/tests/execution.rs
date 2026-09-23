@@ -142,11 +142,34 @@ async fn cancel_and_timeout_end_the_owned_tree_and_drain_output() {
             assert_ne!(code, 259);
         }
     }
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     {
-        let result = unsafe { libc::kill(pid as i32, 0) };
-        if result == 0 {
-            eprintln!("Child is exited or awaiting OS reaping; process group termination confirmed by closed output streams");
+        match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+            Ok(stat) => assert_eq!(
+                stat.rsplit_once(')').unwrap().1.trim().chars().next(),
+                Some('Z')
+            ),
+            Err(error) => assert_eq!(error.kind(), std::io::ErrorKind::NotFound),
+        }
+    }
+    #[cfg(target_os = "macos")]
+    unsafe {
+        let mut info: libc::proc_bsdshortinfo = std::mem::zeroed();
+        let size = std::mem::size_of_val(&info) as i32;
+        let count = libc::proc_pidinfo(
+            pid as i32,
+            libc::PROC_PIDT_SHORTBSDINFO,
+            0,
+            (&mut info as *mut libc::proc_bsdshortinfo).cast(),
+            size,
+        );
+        if count == size {
+            assert_eq!(info.pbsi_status, libc::SZOMB);
+        } else {
+            assert_eq!(
+                std::io::Error::last_os_error().raw_os_error(),
+                Some(libc::ESRCH)
+            );
         }
     }
     runner.request_stop(false).await.unwrap();

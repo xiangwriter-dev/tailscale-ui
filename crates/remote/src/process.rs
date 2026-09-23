@@ -225,27 +225,89 @@ impl Drop for Container {
 }
 
 #[cfg(unix)]
-struct Container(i32);
+struct Container {
+    group: i32,
+    stopped: std::sync::atomic::AtomicBool,
+}
 #[cfg(unix)]
 impl Container {
     fn attach(child: &Child) -> Result<Self, String> {
-        Ok(Self(child.id().ok_or("WORKER_EXITED")? as i32))
+        Ok(Self {
+            group: child.id().ok_or("WORKER_EXITED")? as i32,
+            stopped: std::sync::atomic::AtomicBool::new(false),
+        })
     }
     fn graceful_stop(&self) {
         unsafe {
-            libc::kill(-self.0, libc::SIGTERM);
+            libc::kill(-self.group, libc::SIGTERM);
         }
     }
     fn force_stop(&self) -> Result<(), String> {
-        let result = unsafe { libc::kill(-self.0, libc::SIGKILL) };
-        if result != 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH) {
-            return Err(format!(
-                "PROCESS_GROUP_TERMINATE: {}",
-                std::io::Error::last_os_error()
-            ));
+        use std::sync::atomic::Ordering;
+        if self.stopped.load(Ordering::SeqCst) {
+            return Ok(());
         }
+        let result = unsafe { libc::kill(-self.group, libc::SIGKILL) };
+        if result != 0 {
+            let error = std::io::Error::last_os_error();
+            let absent = error.raw_os_error() == Some(libc::ESRCH);
+            #[cfg(target_os = "macos")]
+            let absent = absent
+                || (error.raw_os_error() == Some(libc::EPERM) && macos_group_exited(self.group)?);
+            if !absent {
+                return Err(format!("PROCESS_GROUP_TERMINATE: {error}"));
+            }
+        }
+        // Never signal this numeric group again after successful termination:
+        // its leader may have been reaped and its number could later be reused.
+        self.stopped.store(true, Ordering::SeqCst);
         Ok(())
     }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_group_exited(group: i32) -> Result<bool, String> {
+    // Darwin killpg can return EPERM for a group containing only zombies.
+    // Verify membership/status with libproc; never treat a real denial as success.
+    // Reference: apple-oss-distributions/xnu, bsd/kern/kern_sig.c, killpg1.
+    let mut pids = [0i32; 4096];
+    let count = unsafe {
+        *libc::__error() = 0;
+        libc::proc_listpgrppids(
+            group,
+            pids.as_mut_ptr().cast(),
+            std::mem::size_of_val(&pids) as i32,
+        )
+    };
+    if count < 0
+        || count as usize >= pids.len()
+        || (count == 0 && std::io::Error::last_os_error().raw_os_error() != Some(0))
+    {
+        return Err("PROCESS_GROUP_STATUS_UNKNOWN".into());
+    }
+    for pid in &pids[..count as usize] {
+        let mut info: libc::proc_bsdshortinfo = unsafe { std::mem::zeroed() };
+        let size = std::mem::size_of_val(&info) as i32;
+        let read = unsafe {
+            libc::proc_pidinfo(
+                *pid,
+                libc::PROC_PIDT_SHORTBSDINFO,
+                0,
+                (&mut info as *mut libc::proc_bsdshortinfo).cast(),
+                size,
+            )
+        };
+        if read != size {
+            if std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH) {
+                continue;
+            }
+            return Err("PROCESS_STATUS_UNKNOWN".into());
+        }
+        if info.pbsi_pgid != group as u32 || info.pbsi_status != libc::SZOMB {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 #[cfg(unix)]
 impl Drop for Container {

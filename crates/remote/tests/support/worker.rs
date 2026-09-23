@@ -5,9 +5,10 @@ fn main() {
     match args.first().map(String::as_str) {
         Some("native-smoke") => {
             let directory = std::path::PathBuf::from(args.get(1).expect("test directory required"));
+            let installed_executable = args.get(2).map(std::path::PathBuf::from);
             let result = tokio::runtime::Runtime::new()
                 .unwrap()
-                .block_on(native_smoke(directory));
+                .block_on(native_smoke(directory, installed_executable));
             match result{Ok(())=>println!("NATIVE_SMOKE_OK: TLS pairing, exec, idempotency, script, cancellation, restart persistence, revocation"),Err(e)=>{eprintln!("NATIVE_SMOKE_FAILED: {e}");std::process::exit(1);}}
         }
         Some("echo") => {
@@ -38,7 +39,10 @@ fn main() {
     }
 }
 
-async fn native_smoke(root: std::path::PathBuf) -> Result<(), String> {
+async fn native_smoke(
+    root: std::path::PathBuf,
+    installed_executable: Option<std::path::PathBuf>,
+) -> Result<(), String> {
     use tailtask_core::remote::*;
     use tailtask_remote::{
         client::RemoteClient,
@@ -72,7 +76,48 @@ async fn native_smoke(root: std::path::PathBuf) -> Result<(), String> {
         node_id: node.node_id.clone(),
         address,
     };
-    lifecycle::start(&agent_dir, config.clone()).await?;
+    async fn start(
+        directory: &std::path::Path,
+        config: AgentConfig,
+        executable: Option<&std::path::Path>,
+    ) -> Result<(), String> {
+        let Some(executable) = executable else {
+            lifecycle::start(directory, config).await?;
+            return Ok(());
+        };
+        config.validate().await?;
+        let store = AgentStore::open(&directory.join("agent.db")).await?;
+        tailtask_remote::identity::initialize(&store, &config, directory).await?;
+        tailtask_remote::identity::write_json(&directory.join("config.json"), &config).await?;
+        store.pool().close().await;
+        drop(store);
+        let mut command = std::process::Command::new(executable);
+        command
+            .arg(lifecycle::SERVE_FLAG)
+            .arg(directory)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        let mut child = command.spawn().map_err(|e| e.to_string())?;
+        for _ in 0..30 {
+            if child.try_wait().map_err(|e| e.to_string())?.is_some() {
+                return Err("INSTALLED_AGENT_EXITED".into());
+            }
+            if lifecycle::status(directory).await.state == "running" {
+                return Ok(());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        Err("INSTALLED_AGENT_NOT_READY".into())
+    }
+    start(&agent_dir, config.clone(), installed_executable.as_deref()).await?;
     let owner = lifecycle::client(&agent_dir).await?;
     let result = async {
         let offer: PairingOffer = owner.post("/owner/pairing", &()).await?;
@@ -174,7 +219,7 @@ async fn native_smoke(root: std::path::PathBuf) -> Result<(), String> {
             }
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
-        lifecycle::start(&agent_dir, config).await?;
+        start(&agent_dir, config, installed_executable.as_deref()).await?;
         let restored: RemoteTask = client.get(&format!("/v1/tasks/{}", first.id)).await?;
         if restored.state != RemoteState::Succeeded {
             return Err("HISTORY_NOT_RETAINED".into());
