@@ -74,7 +74,10 @@ jobs:
             if ($install.ExitCode -ne 0 -or !(Test-Path -LiteralPath $installedExe)) { throw 'Installation failed' }
             $metadata = (Get-Item -LiteralPath $installedExe).VersionInfo
             if ($metadata.ProductVersion -ne $version -or $metadata.ProductName -ne 'xiangwriter远程器') { throw 'Installed product metadata mismatch' }
-            if ((Get-FileHash -LiteralPath $installedExe).Hash -ne (Get-FileHash target/release/tailtask-desktop.exe).Hash) { throw 'Installed executable differs from build' }
+            node --test scripts/verify-nsis-payload.test.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Payload verifier regression' }
+            node scripts/verify-nsis-payload.mjs target/release/tailtask-desktop.exe $installedExe
+            if ($LASTEXITCODE -ne 0) { throw 'Installed executable differs from expected NSIS payload' }
           } finally {
             $uninstaller = Join-Path $installDir 'uninstall.exe'
             if (Test-Path -LiteralPath $uninstaller) {
@@ -83,7 +86,7 @@ jobs:
             }
           }
           if ($uninstallExit -ne 0 -or (Test-Path -LiteralPath $installedExe)) { throw 'Uninstall failed' }
-          [PSCustomObject]@{version=$version;installExit=$install.ExitCode;uninstallExit=$uninstallExit;installedExecutableMatchesBuild=$true;installerSha256=(Get-FileHash -LiteralPath $packages[0].FullName).Hash.ToLowerInvariant()} | ConvertTo-Json -Compress
+          [PSCustomObject]@{version=$version;installExit=$install.ExitCode;uninstallExit=$uninstallExit;installedExecutableMatchesNsisPayload=$true;installerSha256=(Get-FileHash -LiteralPath $packages[0].FullName).Hash.ToLowerInvariant()} | ConvertTo-Json -Compress
       - name: Collect artifacts and checksums
         run: node scripts/collect-artifacts.mjs ${{ matrix.artifact }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
