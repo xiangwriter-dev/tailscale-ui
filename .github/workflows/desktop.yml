@@ -57,6 +57,33 @@ jobs:
           cargo test --workspace --locked
       - name: Build unsigned test installers
         run: npm run tauri build -- --bundles ${{ matrix.bundles }} -- --locked
+      - name: Verify Windows installation and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $packages = @(Get-ChildItem target/release/bundle/nsis -File | Where-Object { $_.Name.EndsWith("_${version}_x64-setup.exe") })
+          if ($packages.Count -ne 1) { throw 'Expected one current Windows installer' }
+          $workspaceTemp = [IO.Path]::GetFullPath($env:RUNNER_TEMP)
+          $installDir = [IO.Path]::GetFullPath((Join-Path $workspaceTemp 'xiangwriter-install-smoke'))
+          if (!$installDir.StartsWith($workspaceTemp + '\', [StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $installDir)) { throw 'Invalid test install directory' }
+          $installedExe = Join-Path $installDir 'tailtask-desktop.exe'
+          $uninstallExit = $null
+          try {
+            $install = Start-Process -FilePath $packages[0].FullName -ArgumentList @('/S', ('/D=' + $installDir)) -WindowStyle Hidden -Wait -PassThru
+            if ($install.ExitCode -ne 0 -or !(Test-Path -LiteralPath $installedExe)) { throw 'Installation failed' }
+            $metadata = (Get-Item -LiteralPath $installedExe).VersionInfo
+            if ($metadata.ProductVersion -ne $version -or $metadata.ProductName -ne 'xiangwriter远程器') { throw 'Installed product metadata mismatch' }
+            if ((Get-FileHash -LiteralPath $installedExe).Hash -ne (Get-FileHash target/release/tailtask-desktop.exe).Hash) { throw 'Installed executable differs from build' }
+          } finally {
+            $uninstaller = Join-Path $installDir 'uninstall.exe'
+            if (Test-Path -LiteralPath $uninstaller) {
+              $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/S', ('_?=' + $installDir)) -WindowStyle Hidden -Wait -PassThru
+              $uninstallExit = $uninstall.ExitCode
+            }
+          }
+          if ($uninstallExit -ne 0 -or (Test-Path -LiteralPath $installedExe)) { throw 'Uninstall failed' }
+          [PSCustomObject]@{version=$version;installExit=$install.ExitCode;uninstallExit=$uninstallExit;installedExecutableMatchesBuild=$true;installerSha256=(Get-FileHash -LiteralPath $packages[0].FullName).Hash.ToLowerInvariant()} | ConvertTo-Json -Compress
       - name: Collect artifacts and checksums
         run: node scripts/collect-artifacts.mjs ${{ matrix.artifact }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
