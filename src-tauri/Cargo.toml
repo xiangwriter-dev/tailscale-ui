@@ -13,6 +13,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tailtask-core = { path = "../crates/core" }
+tailtask-remote = { path = "../crates/remote" }
+rfd = "0.15"
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

@@ -1,0 +1,4 @@
+import { useEffect,useState } from 'react';
+import { remoteApi } from '../remoteApi';
+import { isDesktop } from '../api';
+export function Autostart(){const [enabled,setEnabled]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');useEffect(()=>{if(isDesktop)remoteApi.autostart().then(setEnabled).catch(e=>setError(String(e)));},[]);return <section className="panel agent-panel"><h2>登录后启动</h2><p className="muted">在你登录系统后启动已配置的执行端。首次安装默认关闭。</p><label className="check-row"><input type="checkbox" checked={enabled} disabled={!isDesktop||busy} onChange={async e=>{const next=e.target.checked;setBusy(true);setError('');try{setEnabled(await remoteApi.setAutostart(next));}catch(error){setError(String(error));}finally{setBusy(false);}}}/>登录后自动开启本机执行端</label>{error&&<p className="warning-text" role="alert">{error}</p>}</section>}

@@ -2,7 +2,7 @@
 
 ## 当前产品
 
-桌面设备目录与本机应用修复工作台。Tailscale 提供设备网络与身份观测；本应用不嵌入 VPN 实现，也不把设备在线视为远程授权。
+桌面设备目录、配对远程任务和本机应用维护。Tailscale 提供设备网络与身份观测；本应用不嵌入 VPN 实现，也不把设备在线视为远程授权。
 
 用户于 2026-09-24 撤回了“Agent 仅能修复、不能操控”的限制。当前恢复原 PRD 中用户主动发起的远程命令、脚本、日志、取消和结果功能。0.1.0 已实现本机修复基础；远程任务正在作为新的实施变更开发。窗口、安装器和界面使用 xiangwriter远程器 名称，仓库名称固定 tailscale-ui。
 
@@ -11,7 +11,8 @@
 - src：React 19 / TypeScript 界面；生产数据只来自 Tauri IPC。
 - src-tauri：Tauri 2 命令边界、原生窗口和平台打包。
 - crates/core：Tailscale 只读适配、SQLite 迁移、独占锁、白名单任务生命周期。
-- crates/agent：开发用本机修复 CLI，不启动远程监听。
+- crates/agent：维护 CLI；serve 子命令仅在提供本地配置后显式启动执行端。
+- crates/remote：TLS 配对、平台凭证、后台生命周期、执行队列、结果文件与平台自启适配。
 - openspec/changes/bootstrap-tailtask-repair-foundation：当前基础里程碑的规格和任务证据。
 
 ## 关键不变量

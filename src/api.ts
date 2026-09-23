@@ -4,7 +4,7 @@ import type { AppInfo, Device, NetworkSnapshot, RepairAction, Task, TaskDetail }
 
 export const isDesktop = isTauri();
 
-async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+export async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (!isDesktop) throw new Error('这是浏览器预览，不能访问 Tailscale 或本地数据库。请启动桌面客户端验证功能。');
   return invoke<T>(command, args);
 }

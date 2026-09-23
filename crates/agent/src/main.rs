@@ -5,7 +5,7 @@ use tailtask_core::{RepairAction, RepairRequest, Store};
 #[derive(Parser)]
 #[command(
     version,
-    about = "TailTask repair-only agent. No shell, remote control, or arbitrary command execution."
+    about = "xiangwriter远程器：本机维护与显式开启的远程任务执行端"
 )]
 struct Cli {
     #[arg(long)]
@@ -16,6 +16,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Action {
+    Serve,
     CheckDatabase,
     RebuildIndexes,
     History,
@@ -23,6 +24,7 @@ enum Action {
 
 #[tokio::main]
 async fn main() {
+    tailtask_remote::process::worker_entry();
     if let Err(error) = run().await {
         eprintln!("{error}");
         std::process::exit(1);
@@ -31,6 +33,9 @@ async fn main() {
 
 async fn run() -> Result<(), String> {
     let cli = Cli::parse();
+    if matches!(cli.action, Action::Serve) {
+        return tailtask_remote::service::serve(cli.data_dir).await;
+    }
     let store = Store::open(&cli.data_dir.join("agent.db")).await?;
     match cli.action {
         Action::History => println!(

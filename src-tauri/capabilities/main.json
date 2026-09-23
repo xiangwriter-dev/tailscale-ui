@@ -7,6 +7,10 @@
     "core:default",
     "allow-refresh-network", "allow-cached-devices", "allow-update-device",
     "allow-get-settings", "allow-save-setting", "allow-list-tasks",
-    "allow-task-detail", "allow-submit-repair", "allow-app-info"
+    "allow-task-detail", "allow-submit-repair", "allow-app-info",
+    "allow-remote-connections", "allow-pair-remote", "allow-remote-capabilities",
+    "allow-submit-remote", "allow-remote-histories", "allow-remote-detail", "allow-cancel-remote", "allow-download-remote",
+    "allow-local-agent-status", "allow-choose-agent-directory", "allow-start-local-agent", "allow-local-agent-pairing",
+    "allow-revoke-controller", "allow-stop-local-agent", "allow-agent-autostart", "allow-set-agent-autostart"
   ]
 }

@@ -134,6 +134,54 @@ async fn rejects_tampered_migration_checksum() {
 }
 
 #[tokio::test]
+async fn upgrades_v2_to_v3_and_keeps_a_v2_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("v2.db");
+    let mut conn = legacy(&path).await;
+    conn.execute(include_str!("../migrations/0002_owned_storage.sql"))
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO _sqlx_migrations(version,description,success,checksum,execution_time) VALUES(2,'owned storage',1,?,0)").bind(MIGRATOR.iter().find(|m|m.version==2).unwrap().checksum.as_ref()).execute(&mut conn).await.unwrap();
+    conn.execute("INSERT INTO settings VALUES('retained','旧版历史')")
+        .await
+        .unwrap();
+    conn.close().await.unwrap();
+    let store = Store::open(&path).await.unwrap();
+    assert_eq!(
+        store.setting("retained").await.unwrap().as_deref(),
+        Some("旧版历史")
+    );
+    let version: i64 = sqlx::query_scalar("PRAGMA user_version")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(version, 3);
+    let backup = std::fs::read_dir(dir.path().join("backups"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let mut backup = SqliteConnection::connect_with(
+        &SqliteConnectOptions::new().filename(backup).read_only(true),
+    )
+    .await
+    .unwrap();
+    let version: i64 = sqlx::query_scalar("PRAGMA user_version")
+        .fetch_one(&mut backup)
+        .await
+        .unwrap();
+    assert_eq!(version, 2);
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE name='agent_tasks'")
+            .fetch_one(&mut backup)
+            .await
+            .unwrap();
+    assert_eq!(count, 0);
+    backup.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn lock_rejects_second_owner_and_restart_interrupts_work() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("owned.db");

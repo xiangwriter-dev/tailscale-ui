@@ -1,32 +1,35 @@
-# 0.1.0 验证记录
+# 0.2.0 验证记录
 
-应用：xiangwriter远程器。日期：2026-09-24。内部代码代号 TailTask。
+应用：xiangwriter远程器。日期：2026-09-24。内部代号 TailTask。
 
-## 已有本地证据
+## 已有证据
 
 | 项目 | 结果 |
 | --- | --- |
-| Node / Rust | Node 24.18.0；Rust 1.98.1，锁文件已生成 |
-| 前端检查与生产构建 | 通过 TypeScript 和 Vite 构建 |
-| 前端测试 | 9 项通过：状态筛选、设置失败、请求重试、详情读取失败、账户切换、设备选择与预览禁用 |
-| Rust 工作区测试 | 18 项通过（其中 2 个为测试进程辅助入口）；包含 CLI 非零退出、数据库迁移/备份/校验、并发锁、故障持久化、幂等及子进程资源限制 |
-| Tauri 编译 | Windows x64 release 编译通过 |
-| NSIS 打包 | 成功生成 xiangwriter远程器_0.1.0_x64-setup.exe |
-| UI 检查 | 已查看 1440px 浏览器界面预览；不计为真实桌面交互验收 |
-| GitHub | 已验证公开仓库 xiangwriter-dev/tailscale-ui 与登录 owner |
+| 工具链 | Node 24.18.0、Rust 1.98.1、Windows 11 x64 |
+| 前端 | TypeScript / Vite 通过；12 个测试通过 |
+| Rust | 工作区 check / fmt 通过；35 个测试通过（含 2 个辅助入口） |
+| 数据库 | 模式 1/2 升级至 3，WAL 一致备份、目录锁、所有权隔离、并发幂等、重启不重跑均通过 |
+| 配对 | 过期、单次消费、5 次错误失效、令牌摘要与撤销测试通过 |
+| TLS | 真实 TLS 握手、证书变化拒绝、重定向拒绝、部分下载续传及 SHA-256 不符拒绝通过 |
+| 进程 | Windows 合成进程实测：中文独立参数、真实退出码、父子进程取消、超时、输出洪泛截断通过 |
+| 本机完整链路 | 独立测试目录，经真实本机 Tailscale 地址、系统凭证库完成配对、exec、PowerShell script、幂等、取消、重启记录与撤销，通过；测试服务与凭据已清理 |
+| 前端失败路径 | 详情失败不重提、未知提交沿用原请求、网络变化保留草稿并禁用提交、系统自启注册失败不显示开启，通过 |
 
-MSVC 链接器输出“正在创建库”被 Rust 1.98 标为 linker_messages warning，编译成功；没有掩盖此提示。
+首次 Windows 脚本实测被系统默认执行策略拒绝，随后增加显式任务选项“仅本次进程使用 RemoteSigned”，保持默认“遵循系统策略”。以显式选项重测通过，没有修改系统或用户全局策略。
 
-## 需要单独验证的项目
+0.1.0 基础构建四个平台全部通过：[Actions 35890418954](https://github.com/xiangwriter-dev/tailscale-ui/actions/runs/35890418954)。其 Windows 安装器已实测新装、启动、单实例、覆盖安装、卸载与数据保留。该证据不能替代新增 0.2.0 产物验收。
 
-- Windows 安装器新装、覆盖安装、启动和卸载验证仍在进行。
-- 真实 Tauri 窗口中的完整设备偏好与任务交互、1024px 布局、对应平台的 Tailscale 安装形态测试尚未完成。当前自动化会话不能操作原生窗口，因此不把浏览器测试冒充桌面测试。
-- 尚无新测试设备加入网络的端到端验收；添加设备功能是加入官方网络后的重新发现引导。
-- macOS arm64/x64 与 Ubuntu 24.04 的 CI 结果以对应 Actions 运行记录为准；工作流文件存在不表示构建已经成功。
-- macOS / Linux 安装启动、真实网络发现和持久化仍需对应系统环境。
-- 未配置平台签名或 Apple 公证，所有安装器仅作为无签名测试版交付。
+## 尚未证明的项目
 
-## 可复现命令
+- 0.2.0 的发布安装器构建和安装状态须以本节后续补充为准，不能借用 0.1.0 结果。
+- 原生 Tauri 窗口不能由当前会话的 UI 工具操作；React 测试、浏览器布局和原生进程测试分别记录，不冒充原生窗口全流程测试。
+- macOS/Linux 实机、登录后自启注册、平台凭证授权提示及不同机器的 3×3 组合尚无验证环境。
+- Windows 登录后自启仅有模板和失败 UI 测试，未在用户系统注册真实自启项。
+- 未验证新设备加入 Tailscale 的完整网络审批流程；产品提供官方安装/登录与重新发现指引。
+- 未提供签名、公证、自动更新或屏幕/鼠标键盘远程控制。
+
+## 可复现检查
 
 ```sh
 npm ci
@@ -36,24 +39,8 @@ npm run build
 cargo fmt --all --check
 cargo check --workspace --locked
 cargo test --workspace --locked
-npm run tauri build -- --bundles nsis -- --locked
-node scripts/collect-artifacts.mjs windows-x64
 ```
 
-Rust 故障测试只使用临时目录和合成样例。未上传真实设备清单、用户数据、SQLite、凭证或运行日志。
+原生完整链路辅助程序：`cargo build -p tailtask-remote --bin tailtask-test-worker --locked`，然后运行 `tailtask-test-worker native-smoke <独立测试目录>`。仅在测试主机上调用：需当前 Tailscale 已登录，使用该主机自己的地址和 47879 临时测试端口，结束关闭服务并删除测试凭据。目录不可与用户数据混用。
 
-## 原 PRD 能力对照
-
-| 能力 | 0.1.0 状态 |
-| --- | --- |
-| Tauri 原生桌面工程 | 已实现 |
-| 设备列表 / 搜索 / 别名 / 收藏 / 详情 | 已实现；Windows 原生 UI 完整验收待执行 |
-| 后续添加设备 | 已实现引导与重新发现；新设备加入实测待执行 |
-| SQLite 任务 / 事件 / 状态 | 已实现并通过故障及重启测试 |
-| 白名单本机修复 | 已实现并通过测试 |
-| 远程配对 / 远程修复分发 | 未开放，权限范围待明确 |
-| 任意远程命令 / 控制桌面 | 按后续权限约束不提供 |
-| 三平台安装包 | Windows 已构建；其他平台等 CI 证据 |
-| 签名、自动更新 | 未实现 |
-
-构建参考：[Tauri GitHub CI](https://v2.tauri.app/distribute/pipelines/github/)、[GitHub 托管 runner](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
+未上传真实节点身份、数据库、私钥、令牌或运行日志。MSVC 的“正在创建库”被 Rust 1.98 报为 linker_messages warning；构建成功且未屏蔽提示。

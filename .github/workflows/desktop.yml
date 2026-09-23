@@ -54,7 +54,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2t64 file
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2t64 libdbus-1-dev file
       - name: Locked dependencies
         run: npm ci
       - name: Frontend checks
@@ -76,7 +76,7 @@ jobs:
         run: node scripts/collect-artifacts.mjs ${{ matrix.artifact }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: tailtask-0.1.0-${{ matrix.artifact }}-unsigned
+          name: xiangwriter-0.2.0-${{ matrix.artifact }}-unsigned
           path: release/*
           if-no-files-found: error
           retention-days: 30

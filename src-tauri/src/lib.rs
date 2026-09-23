@@ -1,10 +1,14 @@
 use tailtask_core::{Device, NetworkSnapshot, RepairRequest, Store, Task, TaskDetail};
 use tauri::{Emitter, Manager, State};
+mod remote;
 
 struct AppState {
     store: Store,
     data_dir: String,
     refresh_lock: tokio::sync::Mutex<()>,
+    remote: tailtask_core::remote::ControllerStore,
+    remote_lock: tokio::sync::Mutex<()>,
+    agent_lock: tokio::sync::Mutex<()>,
 }
 
 #[tauri::command]
@@ -115,7 +119,7 @@ async fn submit_repair(
 #[tauri::command]
 fn app_info(state: State<'_, AppState>) -> serde_json::Value {
     serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"data_dir":state.data_dir,
-        "agent_policy":"repair_only","ui_design":"minimal_tech","remote_enabled":false})
+        "agent_policy":"paired_user_tasks","ui_design":"minimal_tech","remote_enabled":true})
 }
 
 pub fn run() {
@@ -136,6 +140,12 @@ pub fn run() {
                 tauri::async_runtime::block_on(Store::open(&data_dir.join("controller.db")))
                     .map_err(std::io::Error::other)?;
             app.manage(AppState {
+                remote: tauri::async_runtime::block_on(
+                    tailtask_core::remote::ControllerStore::new(store.clone()),
+                )
+                .map_err(std::io::Error::other)?,
+                remote_lock: tokio::sync::Mutex::new(()),
+                agent_lock: tokio::sync::Mutex::new(()),
                 store,
                 data_dir: data_dir.display().to_string(),
                 refresh_lock: tokio::sync::Mutex::new(()),
@@ -151,7 +161,23 @@ pub fn run() {
             list_tasks,
             task_detail,
             submit_repair,
-            app_info
+            app_info,
+            remote::remote_connections,
+            remote::pair_remote,
+            remote::remote_capabilities,
+            remote::submit_remote,
+            remote::remote_histories,
+            remote::remote_detail,
+            remote::cancel_remote,
+            remote::download_remote,
+            remote::local_agent_status,
+            remote::choose_agent_directory,
+            remote::start_local_agent,
+            remote::local_agent_pairing,
+            remote::revoke_controller,
+            remote::stop_local_agent,
+            remote::agent_autostart,
+            remote::set_agent_autostart
         ])
         .run(tauri::generate_context!())
         .expect("xiangwriter远程器 启动失败；请保留数据库并检查启动错误");

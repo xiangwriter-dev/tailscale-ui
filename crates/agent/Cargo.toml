@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 tailtask-core = { path = "../core" }
+tailtask-remote = { path = "../remote" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

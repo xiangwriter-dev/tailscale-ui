@@ -12,7 +12,7 @@ use std::{
 
 pub(crate) static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 const APPLICATION_ID: i64 = 1414810417;
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 #[cfg(test)]
 #[path = "database_tests.rs"]
@@ -130,7 +130,7 @@ async fn inspect(conn: &mut SqliteConnection) -> Result<bool, String> {
     ] {
         sqlx::query(statement).fetch_all(&mut *conn).await.map_err(|_| "DATABASE_NOT_OWNED: 应用模式不完整")?;
     }
-    if current >= 2 && (app_id != APPLICATION_ID || schema != SCHEMA_VERSION) {
+    if current >= 2 && (app_id != APPLICATION_ID || schema != current) {
         return Err("DATABASE_NOT_OWNED: 产品标记不一致".into());
     }
     Ok(current < SCHEMA_VERSION)

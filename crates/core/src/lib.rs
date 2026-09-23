@@ -1,5 +1,6 @@
 mod database;
 pub mod model;
+pub mod remote;
 pub mod storage;
 pub mod tailscale;
 

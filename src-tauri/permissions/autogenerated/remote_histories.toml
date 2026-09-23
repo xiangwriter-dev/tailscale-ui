@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remote-histories"
+description = "Enables the remote_histories command without any pre-configured scope."
+commands.allow = ["remote_histories"]
+
+[[permission]]
+identifier = "deny-remote-histories"
+description = "Denies the remote_histories command without any pre-configured scope."
+commands.deny = ["remote_histories"]
